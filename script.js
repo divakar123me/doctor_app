@@ -1,5 +1,5 @@
 /* MediBook frontend – vanilla JS. Only the public Apps Script Web App URL lives here (no secrets). */
-const API_URL = 'PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
+const API_URL = 'https://script.google.com/macros/s/AKfycby6UqIZnZrOAstMVNO6ULzC_TGVBrr8BE6KYAk1WsWCupfXzHvCWV0tQp1RsCsLaaBI/exec';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&','<':'<','>':'>','"':'"',"'":'''}[c]));
 const S = {token: sessionStorage.getItem('tk'), user: JSON.parse(sessionStorage.getItem('us') || 'null'), view: '', arg: null, doctors: {}};
