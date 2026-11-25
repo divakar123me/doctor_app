@@ -1,5 +1,5 @@
 /* MediBook frontend - vanilla JS. Only the public Apps Script Web App URL lives here (no secrets). */
-const API_URL = 'https://script.google.com/macros/s/AKfycbxEEYtmNXMP64o0GFJ_3r_wjRxTSh6et07SdWplEkFZq1l7V6tytvBJu0WI8BSCRVAc4w/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycby03iqtS2rBEas3FvjW539-5b_5Eg2NaasZZ-xwqUqMhBv2zxkm__8KWw4YoZUENwAilg/exec';
 const RS = '\u20b9';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
