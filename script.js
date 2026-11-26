@@ -1,5 +1,5 @@
 /* MediBook frontend - vanilla JS. Only the public Apps Script Web App URL lives here (no secrets). */
-const API_URL = 'PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
+const API_URL = 'https://script.google.com/macros/s/AKfycbziAeTDRUNdv6OfnGmYnqy0TQ1M2aPWY-YT14te7C2euDJVqEON_XN4lCmh5HUAAMfLOA/exec';
 const RS = '\u20b9';
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -125,9 +125,12 @@ async function showGuest() {
   $('#auth').hidden = true; $('#guest').hidden = false;
   try {
     const docs = await api('public.doctors', {}), pre = S.pre || {};
+    let ref = ''; try { ref = localStorage.getItem('mb_ref') || ''; } catch (e) { /* storage unavailable */ }
     if (!docs.length) { $('#guestBox').innerHTML = '<p class="mut">No doctors are available right now.</p>'; return; }
     const opts = docs.map(d => [d.id, `${d.name} - ${d.specialization} (${RS}${d.fee})`]);
-    $('#guestBox').innerHTML = `<div id="gdone"></div><form id="gf">${fld({name: 'doctorId', label: 'Doctor', type: 'select', opts, req: 1}, pre)}` +
+    $('#guestBox').innerHTML = `<div id="gdone"></div>` +
+      `<form id="lf" class="panel"><b>Already booked? Find your token</b>${fld({name: 'q', label: 'Phone number, email or booking reference (e.g. APT00005)', req: 1}, {q: ref})}<div id="lcode" hidden>${fld({name: 'code', label: '6-digit code sent to your email', attr: 'maxlength="6" inputmode="numeric" autocomplete="one-time-code"'})}</div><button class="btn sm" id="lbtn" style="margin-top:10px">Send code to my email</button></form>` +
+      `<form id="gf">${fld({name: 'doctorId', label: 'Doctor', type: 'select', opts, req: 1}, pre)}` +
       `${fld({name: 'date', label: 'Date', type: 'date', req: 1, attr: `min="${todayStr()}"`}, {date: pre.date || todayStr()})}` +
       '<div id="gq"></div><h3>Book your token</h3><label>Available slots</label><div class="slots" id="gsl"></div><input type="hidden" name="time">' +
       `${fld({name: 'name', label: 'Your name', req: 1})}${fld({name: 'phone', label: 'Phone', req: 1})}` +
@@ -142,10 +145,31 @@ async function showGuest() {
       $('#gref').onclick = () => refresh().catch(x => toast(x.message, 1));
     };
     f.doctorId.onchange = f.date.onchange = () => refresh().catch(x => toast(x.message, 1));
+    const lf = $('#lf'); let stage = 0;
+    const lreset = () => { stage = 0; $('#lcode').hidden = true; $('#lbtn').textContent = 'Send code to my email'; lf.code.value = ''; };
+    lf.q.oninput = lreset;
+    lf.onsubmit = async e => {
+      e.preventDefault();
+      try {
+        if (!stage) {
+          await api('public.otp.request', {q: lf.q.value}); stage = 1; $('#lcode').hidden = false; $('#lbtn').textContent = 'Verify & show my token';
+          toast('If a matching appointment exists, a 6-digit code was emailed to the address used for booking'); return;
+        }
+        const r = await api('public.otp.verify', {q: lf.q.value, code: lf.code.value});
+        const nx = r.find(a => a.upcoming && a.status === 'Scheduled') || r[0];
+        S.mine = {doctorId: nx.doctorId, date: nx.date, token: nx.token}; S.pre = {doctorId: nx.doctorId, date: nx.date};
+        await showGuest();
+        $('#gdone').innerHTML = '<div class="panel"><h3 style="margin-top:0">Your appointments</h3>' +
+          (nx.upcoming && nx.status === 'Scheduled' ? `<p>Your next token number</p><div class="token">#${esc(nx.token)}</div><p>${esc(nx.doctor)} - ${esc(nx.date)} at ${esc(nx.time)}</p>` : '') +
+          table(['Token', 'Patient', 'Doctor', 'Date', 'Time', 'Status', 'Reference'], r.map(a => `<tr><td><b>#${esc(a.token)}</b></td><td>${esc(a.patient)}</td><td>${esc(a.doctor)}<br><small>${esc(a.specialization)}</small></td><td>${esc(a.date)}</td><td>${esc(a.time)}</td><td>${badge(a.status)}${a.upcoming ? '' : ' <small>past</small>'}</td><td>${esc(a.id)}</td></tr>`)) + '</div>';
+        window.scrollTo(0, 0);
+      } catch (x) { toast(x.message, 1); if (/new code|expired/i.test(x.message)) lreset(); }
+    };
     f.onsubmit = async e => {
       e.preventDefault(); if (!f.time.value) return toast('Please choose a time slot', 1);
       try {
         const r = await api('public.book', Object.fromEntries(new FormData(f)));
+        try { localStorage.setItem('mb_ref', r.id); } catch (e) { /* ignore */ }
         S.mine = {doctorId: f.doctorId.value, date: r.date, token: r.token}; S.pre = {doctorId: f.doctorId.value, date: r.date};
         await showGuest();
         $('#gdone').innerHTML = `<div class="panel"><h3 style="margin-top:0">Appointment booked</h3><p>Your token number</p><div class="token">#${esc(r.token)}</div>` +
