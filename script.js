@@ -198,9 +198,7 @@ V.book = async pre => {
     fld({name: 'doctorId', label: 'Doctor', type: 'select', opts: docs.map(d => [d.id, `${d.name} - ${d.specialization} (${RS}${d.fee})`]), req: 1}, {doctorId: pre}) +
     fld({name: 'date', label: 'Date', type: 'date', req: 1, attr: `min="${todayStr()}"`}) +
     '<label>Available slots</label><div class="slots" id="sl"><span class="mut">Select doctor and date</span></div><input type="hidden" name="time">' +
-    fld({name: 'reason', label: 'Reason for visit', type: 'textarea'}) + '<button class="btn block">Confirm booking</button></form>' +
-    '<h3>Appointments</h3><div id="ba"></div>';
-  api('appointments.list', {}).then(l => { $('#ba').innerHTML = apptTable(l); }).catch(x => toast(x.message, 1));
+    fld({name: 'reason', label: 'Reason for visit', type: 'textarea'}) + '<button class="btn block">Confirm booking</button></form>';
   const f = $('#bf'), loadSlots = async () => {
     f.time.value = ''; if (!f.date.value) return;
     const s = await api('slots', {doctorId: f.doctorId.value, date: f.date.value});
@@ -209,7 +207,7 @@ V.book = async pre => {
   f.doctorId.onchange = f.date.onchange = () => loadSlots().catch(x => toast(x.message, 1));
   f.onsubmit = async e => {
     e.preventDefault(); if (!f.time.value) return toast('Please choose a time slot', 1);
-    try { await api('appointments.book', Object.fromEntries(new FormData(f))); toast('Appointment booked!'); go('book'); }
+    try { await api('appointments.book', Object.fromEntries(new FormData(f))); toast('Appointment booked!'); go('appointments'); }
     catch (x) { toast(x.message, 1); loadSlots(); }
   };
 };
