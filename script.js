@@ -113,6 +113,12 @@ $('#bell').onclick = async () => {
   } catch (x) { toast(x.message, 1); }
 };
 
+function selReset(f) { const e = f.querySelector('.sel'); if (e) { e.textContent = 'No time selected yet'; e.className = 'sel mut'; } }
+function slotWarn(f) {
+  const b = f.querySelector('.slotbox'); b.classList.add('warn'); b.scrollIntoView({behavior: 'smooth', block: 'center'}); setTimeout(() => b.classList.remove('warn'), 2500);
+  toast('Please tap a time slot (for example 09:00) under "Choose a time slot" first. If none are shown, choose another date or doctor.', 1);
+}
+
 /* ---------- public first page (no login): live token list + booking ---------- */
 const queueHtml = q => {
   const m = S.mine || {};
@@ -130,19 +136,21 @@ async function showGuest() {
     const opts = docs.map(d => [d.id, `${d.name} - ${d.specialization} (${RS}${d.fee})`]);
     $('#guestBox').innerHTML = `<div id="gdone"></div>` +
       `<form id="lf" class="panel"><b>Already booked? Find your token</b>${fld({name: 'q', label: 'Phone number, email or booking reference (e.g. APT00005)', req: 1}, {q: ref})}<div id="lcode" hidden>${fld({name: 'code', label: '6-digit code sent to your email', attr: 'maxlength="6" inputmode="numeric" autocomplete="one-time-code"'})}</div><button class="btn sm" id="lbtn" style="margin-top:10px">Send code to my email</button></form>` +
-      `<form id="gf">${fld({name: 'doctorId', label: 'Doctor', type: 'select', opts, req: 1}, pre)}` +
+      `<div class="split"><form id="gf"><h3 style="margin-top:0">1. Choose doctor &amp; date</h3>${fld({name: 'doctorId', label: 'Doctor', type: 'select', opts, req: 1}, pre)}` +
       `${fld({name: 'date', label: 'Date', type: 'date', req: 1, attr: `min="${todayStr()}"`}, {date: pre.date || todayStr()})}` +
-      '<div id="gq"></div><h3>Book your token</h3><label>Available slots</label><div class="slots" id="gsl"></div><input type="hidden" name="time">' +
-      `${fld({name: 'name', label: 'Your name', req: 1})}${fld({name: 'phone', label: 'Phone', req: 1})}` +
+      '<h3>2. Choose a time slot</h3><div class="slotbox"><div class="slots" id="gsl"></div></div><div class="sel mut">No time selected yet</div><input type="hidden" name="time">' +
+      '<h3>3. Your details</h3>' + `${fld({name: 'name', label: 'Your name', req: 1})}${fld({name: 'phone', label: 'Phone', req: 1})}` +
       `${fld({name: 'email', label: 'Email', type: 'email', req: 1})}${fld({name: 'reason', label: 'Reason for visit', type: 'textarea'})}` +
-      '<input name="website" style="display:none" tabindex="-1" autocomplete="off"><button class="btn block">Confirm booking &amp; get token</button></form>';
+      '<input name="website" style="display:none" tabindex="-1" autocomplete="off"><button class="btn block">Confirm booking &amp; get token</button></form><div id="gq"></div></div>';
     const f = $('#gf'), refresh = async () => {
-      f.time.value = ''; if (!f.date.value) return;
+      f.time.value = ''; selReset(f); if (!f.date.value) return;
       const p = {doctorId: f.doctorId.value, date: f.date.value};
-      const [q, s] = await Promise.all([api('public.queue', p), api('public.slots', p)]);
-      $('#gq').innerHTML = queueHtml(q);
-      $('#gsl').innerHTML = s.map(t => `<button type="button" class="slot" data-act="slot" data-t="${t}">${t}</button>`).join('') || '<span class="mut">No slots available that day</span>';
-      $('#gref').onclick = () => refresh().catch(x => toast(x.message, 1));
+      $('#gsl').innerHTML = '<span class="mut">Loading slots...</span>';
+      const [q, sl] = await Promise.allSettled([api('public.queue', p), api('public.slots', p)]);
+      if (q.status === 'fulfilled') { $('#gq').innerHTML = queueHtml(q.value); $('#gref').onclick = () => refresh().catch(x => toast(x.message, 1)); }
+      else $('#gq').innerHTML = '<p class="over">Could not load the token list: ' + esc(q.reason.message) + '</p>';
+      $('#gsl').innerHTML = sl.status === 'fulfilled' ? (sl.value.map(t => `<button type="button" class="slot" data-act="slot" data-t="${t}">${t}</button>`).join('') || '<span class="mut">No slots available - please choose another date or doctor</span>')
+        : '<span class="over">Could not load slots: ' + esc(sl.reason.message) + '</span>';
     };
     f.doctorId.onchange = f.date.onchange = () => refresh().catch(x => toast(x.message, 1));
     const lf = $('#lf'); let stage = 0;
@@ -166,7 +174,7 @@ async function showGuest() {
       } catch (x) { toast(x.message, 1); if (/new code|expired/i.test(x.message)) lreset(); }
     };
     f.onsubmit = async e => {
-      e.preventDefault(); if (!f.time.value) return toast('Please choose a time slot', 1);
+      e.preventDefault(); if (!f.time.value) return slotWarn(f);
       try {
         const r = await api('public.book', Object.fromEntries(new FormData(f)));
         try { localStorage.setItem('mb_ref', r.id); } catch (e) { /* ignore */ }
@@ -235,19 +243,23 @@ V.book = async pre => {
   $('#view').innerHTML = '<h2>Book an appointment</h2><form class="panel" id="bf" style="max-width:640px">' +
     (role() === 'admin' ? fld({name: 'patientId', label: 'Patient', type: 'select', opts: pats.map(p => [p.id, `${p.name} (${p.id})`]), req: 1}) : '') +
     fld({name: 'doctorId', label: 'Doctor', type: 'select', opts: docs.map(d => [d.id, `${d.name} - ${d.specialization} (${RS}${d.fee})`]), req: 1}, {doctorId: pre}) +
-    fld({name: 'date', label: 'Date', type: 'date', req: 1, attr: `min="${todayStr()}"`}) +
-    '<label>Available slots</label><div class="slots" id="sl"><span class="mut">Select doctor and date</span></div><input type="hidden" name="time">' +
+    fld({name: 'date', label: 'Date', type: 'date', req: 1, attr: `min="${todayStr()}"`}, {date: todayStr()}) +
+    '<h3>Choose a time slot</h3><div class="slotbox"><div class="slots" id="sl"><span class="mut">Select doctor and date</span></div></div><div class="sel mut">No time selected yet</div><input type="hidden" name="time">' +
     fld({name: 'reason', label: 'Reason for visit', type: 'textarea'}) + '<button class="btn block">Confirm booking</button></form>' +
     '<h3>Appointments</h3><div id="ba"></div>';
   api('appointments.list', {}).then(l => { $('#ba').innerHTML = apptTable(l); }).catch(x => toast(x.message, 1));
   const f = $('#bf'), loadSlots = async () => {
-    f.time.value = ''; if (!f.date.value) return;
-    const s = await api('slots', {doctorId: f.doctorId.value, date: f.date.value});
-    $('#sl').innerHTML = s.map(t => `<button type="button" class="slot" data-act="slot" data-t="${t}">${t}</button>`).join('') || '<span class="mut">No slots available that day</span>';
+    f.time.value = ''; selReset(f); if (!f.date.value) return;
+    $('#sl').innerHTML = '<span class="mut">Loading slots...</span>';
+    try {
+      const sl = await api('slots', {doctorId: f.doctorId.value, date: f.date.value});
+      $('#sl').innerHTML = sl.map(t => `<button type="button" class="slot" data-act="slot" data-t="${t}">${t}</button>`).join('') || '<span class="mut">No slots available - please choose another date or doctor</span>';
+    } catch (x) { $('#sl').innerHTML = '<span class="over">Could not load slots: ' + esc(x.message) + '</span>'; }
   };
   f.doctorId.onchange = f.date.onchange = () => loadSlots().catch(x => toast(x.message, 1));
+  loadSlots().catch(x => toast(x.message, 1));
   f.onsubmit = async e => {
-    e.preventDefault(); if (!f.time.value) return toast('Please choose a time slot', 1);
+    e.preventDefault(); if (!f.time.value) return slotWarn(f);
     try { await api('appointments.book', Object.fromEntries(new FormData(f))); toast('Appointment booked!'); go('book'); }
     catch (x) { toast(x.message, 1); loadSlots(); }
   };
@@ -312,7 +324,7 @@ V.reports = async () => {
 const aptOpts = () => [['', '- none -'], ...S.pat.appointments.map(a => [a.id, `${a.id} - ${a.date}`])];
 const ACT = {
   open: d => go('patient', d.id), bookDoc: d => go('book', d.id),
-  slot: (d, el) => { document.querySelectorAll('.slot').forEach(x => x.classList.toggle('on', x === el)); el.closest('form').time.value = d.t; },
+  slot: (d, el) => { document.querySelectorAll('.slot').forEach(x => x.classList.toggle('on', x === el)); const fm = el.closest('form'); fm.time.value = d.t; const e = fm.querySelector('.sel'); if (e) { e.textContent = 'Selected time: ' + d.t; e.className = 'sel ok'; } },
   docView: d => {
     const x = S.doctors[d.id];
     overlay(`<div class="modal"><h3>${esc(x.name)}</h3><p><b>${esc(x.specialization)}</b> - ${esc(x.experience || 0)} years experience</p><p>${esc(x.bio || '')}</p>` +
